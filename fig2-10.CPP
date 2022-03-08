@@ -63,6 +63,7 @@ int GRID[COLUMNS][ROWS][AISLES]; // Current (columns x rows x aisles) grid
 int*** nextState = NULL; // Grid after iteration
 float cameraAngle = 1;
 int startingAmount = 40;
+bool isPaused = false;
 GLfloat mouseX;
 GLfloat mouseY;
 
@@ -84,60 +85,44 @@ void initGlut(int argc, char** argv)
 // ********* DISPLAY FUNC *********
 void Display()
 {
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear screen
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear screen
 
-		glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-		
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		glOrtho(-1, SCREEN_WIDTH, -1, SCREEN_HEIGHT, 10000, -10000);
-		//gluPerspective(30, SCREEN_WIDTH / SCREEN_HEIGHT, 0.1, 1000);
+	glutWireCube(SCREEN_WIDTH);
+	for (int i = 0; i < COLUMNS; i++)
+		for (int j = 0; j < ROWS; j++)
+			for (int k = 0; k < AISLES; k++)
+			{
+				int x = i * RESOLUTION, y = j * RESOLUTION, z = k * RESOLUTION; // get where the rect starts
 
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-		
-		gluLookAt(-20, -50, 180, 0.5, 0, 0, 0, 1, 0);
-		//glTranslatef(0, 0, -350);
-		glRotatef(25, 0, 1, 0);
+				//glBegin(GL_POLYGON); // draw rects
 
-		glutWireCube(SCREEN_WIDTH);
+				// determine color (black is alive, white is dead)
+				if (GRID[i][j][k] != 1) continue;
 
-		for (int i = 0; i < COLUMNS; i++)
-			for (int j = 0; j < ROWS; j++)
-				for (int k = 0; k < AISLES; k++)
-				{
-					int x = i * RESOLUTION, y = j * RESOLUTION, z = k * RESOLUTION; // get where the rect starts
-					
-					//glBegin(GL_POLYGON); // draw rects
+				//glColor3f(0, 0, 0);
+				glColor3f(1.0 / (i + 2), 1.0 / (j + 2), 1.0 / (k + 2));
 
-					// determine color (black is alive, white is dead)
-					if (GRID[i][j][k] != 1) continue;
+				// draw rect, sub by 1 for spacing between cells for better visibility
+				//glVertex3i(x, y, z);
+				//glVertex3i(x + RESOLUTION - 1, y, z);
+				//glVertex3i(x + RESOLUTION - 1, y + RESOLUTION - 1, (z));
+				//glVertex3i(x, y + RESOLUTION - 1, (z));
 
-					//glColor3f(0, 0, 0);
-					glColor3f(1.0 / (i + 2), 1.0 / (j + 2), 1.0 / (k + 2));
-					
-					// draw rect, sub by 1 for spacing between cells for better visibility
-					//glVertex3i(x, y, z);
-					//glVertex3i(x + RESOLUTION - 1, y, z);
-					//glVertex3i(x + RESOLUTION - 1, y + RESOLUTION - 1, (z));
-					//glVertex3i(x, y + RESOLUTION - 1, (z));
+				//glEnd();
+				glPushMatrix();
+				glTranslatef(x, y, z - 350);
+				glScalef(0.8, 0.8, 0.8);
+				glutSolidCube(RESOLUTION);
+				glColor3f(0.5, 0.5, 0.5);
+				glutWireCube(RESOLUTION);
+				glPopMatrix();
+			}
+	//glEnd();
 
-					//glEnd();
-					glPushMatrix();
-					glTranslatef(x, y, z - 350);
-					glScalef(0.8, 0.8, 0.8);
-					glutSolidCube(RESOLUTION);
-					glColor3f(0.5, 0.5, 0.5);
-					glutWireCube(RESOLUTION);
-					glPopMatrix();
-				}
+	// render
+	glFlush();
 
-		//glEnd();
-
-		// render
-		glFlush();
-
-		glutSwapBuffers();
+	glutSwapBuffers();
 }
 
 // ********* INIT SETTINGS AND GRID *********
@@ -152,6 +137,20 @@ void Init()
 	//glOrtho(1.0, SCREEN_WIDTH, 0.0, SCREEN_HEIGHT, 0.0, SCREEN_WIDTH);
 	//glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 	glEnable(GL_DEPTH_TEST); // enable depth test
+
+	glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(-1, SCREEN_WIDTH, -1, SCREEN_HEIGHT, 10000, -10000);
+	//gluPerspective(30, SCREEN_WIDTH / SCREEN_HEIGHT, 0.1, 1000);
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	gluLookAt(-20, -50, 180, 0.5, 0, 0, 0, 1, 0);
+	//glTranslatef(0, 0, -350);
+	glRotatef(25, 0, 1, 0);
 
 	// fill grid with random points
 	while (startingAmount > 0)
@@ -169,6 +168,10 @@ void Init()
 // ********* NEXT STATE LOGIC *********
 void getNextState()
 {
+	if (isPaused) {
+		return;
+	}
+
 	// fill nextState with the next iteration of grid, then set grid to nextState
 	nextState = new int** [COLUMNS];
 	
@@ -295,12 +298,18 @@ void keyboard(unsigned char key, int x, int y)
         case 'd':
             translate(-SCREEN_WIDTH / 10, 0, 0);
             break;
-        case 'w':
-            translate(0, 0.1, 0);
-            break;
         case 's':
-            translate(0, -0.1, 0);
+            translate(0, SCREEN_HEIGHT / 10, 0);
             break;
+        case 'w':
+            translate(0, -SCREEN_HEIGHT / 10, 0);
+            break;
+		case 'r':
+			zoom(1.1);
+			break;
+		case 'f':
+			zoom(0.9);
+			break;
         case 'z':
             rotate(1, 0, 0, 1);
             break;
@@ -309,6 +318,7 @@ void keyboard(unsigned char key, int x, int y)
             break;
         case ' ':
             // pause the game
+			isPaused = !isPaused;
             break;
         default:
             break;   
@@ -318,9 +328,9 @@ void keyboard(unsigned char key, int x, int y)
 // ********* INPUT CALLBACKS **************
 void mouse(int button, int state, int x, int y) {
 	std::cout << "Mouse event: " << button << " " << state << " " << std::endl;
-    if (button == 3) { // scroll wheel up
+    if (button == 3) { // scroll wheel up not working :(
         zoom(5);
-    } else if (button == 4) { // scroll wheel down
+    } else if (button == 4) { // scroll wheel down not working :(
         zoom(-5);
     } else if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         mouseX = x;
