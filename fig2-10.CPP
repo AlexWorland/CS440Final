@@ -1,10 +1,10 @@
-/* 
+/*
 	Alek Michael
 	Conway's Game of Life in 2D. This is meant as a introduction to me about the game and how it would be made in GLUT.
 	Much thanks to Coding train for an awesome explanation and run down of the game. I highly reccomend that channel!
 	Ideas to expand this would to use the mouse for initial settings and perhaps allow the user select initial placements.
 	Mouse clicks could also determine when to iterate the states.
-*/ 
+*/
 
 #include <iostream>
 
@@ -28,6 +28,7 @@
 void Display(void);
 void Init(void);
 void initGlut(int argc, char** argv);
+void createRandomState(void);
 void getNextState(void);
 int countNeighbors(int x, int y, int z);
 void update(int value);
@@ -41,14 +42,14 @@ void zoom(float factor);
 
 
 // ********* MAIN *********
-int main (int argc, char** argv)
+int main(int argc, char** argv)
 {
 	// initialize GLUT settings
 	initGlut(argc, argv);
 
 	// initialize the first grid and 
 	Init();
-	
+
 	// update the game and display the results
 	update(0);
 	glutMainLoop();
@@ -57,12 +58,13 @@ int main (int argc, char** argv)
 }
 
 // ********* GLOBALS *********
-const int SCREEN_WIDTH = 1200, SCREEN_HEIGHT = 800, DEPTH = 1200, RESOLUTION = 80,  FPS = 10; // area of screen, size of rectangles, and FPS
+const int scale = 5;
+const int SCREEN_WIDTH = 1200 * scale, SCREEN_HEIGHT = 800 * scale, DEPTH = 1200 * scale, RESOLUTION = 80, FPS = 10; // area of screen, size of rectangles, and FPS
 const int COLUMNS = SCREEN_WIDTH / RESOLUTION, ROWS = SCREEN_HEIGHT / RESOLUTION, AISLES = DEPTH / RESOLUTION; // # of columns, rows, and aisles in grid
 int GRID[COLUMNS][ROWS][AISLES]; // Current (columns x rows x aisles) grid
 int*** nextState = NULL; // Grid after iteration
 float cameraAngle = 1;
-int startingAmount = 40;
+int startingAmount = 20000;
 bool isPaused = false;
 GLfloat mouseX;
 GLfloat mouseY;
@@ -77,7 +79,7 @@ void initGlut(int argc, char** argv)
 	//glutInitWindowPosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("Conway's Game of Life 3D");
-    glutMouseFunc(mouse);
+	glutMouseFunc(mouse);
 	glutKeyboardFunc(keyboard);
 	glutDisplayFunc(Display);
 }
@@ -87,7 +89,7 @@ void Display()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear screen
 
-	glutWireCube(SCREEN_WIDTH);
+	//glutWireCube(SCREEN_WIDTH * scale);
 	for (int i = 0; i < COLUMNS; i++)
 		for (int j = 0; j < ROWS; j++)
 			for (int k = 0; k < AISLES; k++)
@@ -128,12 +130,12 @@ void Display()
 // ********* INIT SETTINGS AND GRID *********
 void Init()
 {
-    glClearColor(1.0,1.0,1.0,0.0);
-    glColor3f(0.0f,0.0f,0.0f);
-    glPointSize(4.0);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    //gluOrtho2D(1.0,SCREEN_WIDTH,0.0,SCREEN_HEIGHT);
+	glClearColor(1.0, 1.0, 1.0, 0.0);
+	glColor3f(0.0f, 0.0f, 0.0f);
+	glPointSize(4.0);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	//gluOrtho2D(1.0,SCREEN_WIDTH,0.0,SCREEN_HEIGHT);
 	//glOrtho(1.0, SCREEN_WIDTH, 0.0, SCREEN_HEIGHT, 0.0, SCREEN_WIDTH);
 	//glOrtho(-1.0, 1.0, -1.0, 1.0, -1.0, 1.0);
 	glEnable(GL_DEPTH_TEST); // enable depth test
@@ -153,17 +155,44 @@ void Init()
 	glRotatef(25, 0, 1, 0);
 
 	// fill grid with random points
+	createRandomState();
+}
+
+void createRandomState()
+{
+	for (int i = 0; i < COLUMNS; i++)
+		for (int j = 0; j < ROWS; j++)
+			for (int k = 0; k < AISLES; k++)
+				GRID[i][j][k] = 0;
+
+	int temp = startingAmount;
 	while (startingAmount > 0)
 		for (int i = 0; i < COLUMNS; i++)
 			for (int j = 0; j < ROWS; j++)
 				for (int k = 0; k < AISLES; k++)
 				{
+					if (startingAmount <= 0) break;
 					if (GRID[i][j][k] == 1) continue;
-					int decision = rand() % 2;
-					if (decision == 1) startingAmount--;
-					GRID[i][j][k] = (startingAmount <= 0) ? 0 : decision;
+					int decision = rand() % 200;
+
+					if (decision > 180)
+					{
+						GRID[i][j][k] = 1;
+						startingAmount--;
+					}
+					else GRID[i][j][k] = 0;
+
+
+					//GRID[i][j][k] = (startingAmount <= 0) ? 0 : decision;
 				}
+	startingAmount = temp;
 }
+
+enum State
+{
+	life = 1,
+	death = 0
+};
 
 // ********* NEXT STATE LOGIC *********
 void getNextState()
@@ -174,7 +203,7 @@ void getNextState()
 
 	// fill nextState with the next iteration of grid, then set grid to nextState
 	nextState = new int** [COLUMNS];
-	
+
 	for (int i = 0; i < COLUMNS; i++)
 	{
 		nextState[i] = new int* [ROWS];
@@ -182,7 +211,7 @@ void getNextState()
 			nextState[i][j] = new int[AISLES];
 	}
 
-	
+
 
 	for (int i = 0; i < COLUMNS; i++)
 		for (int j = 0; j < ROWS; j++)
@@ -193,17 +222,43 @@ void getNextState()
 
 				// find # of neighbors around this cell
 				int neighborCount = countNeighbors(i, j, k);
-				
+
 				/*
 					Conway's rules in 3d can be many things. We will use the rules:
 					An alive cell with 4 or 5 neighbors lives on.
 					If the cell is dead but has exactly 5 neighbors, it will be alive.
 					Otherwise, the cell dies.
-				*/
-				if ((currState == 1 && (neighborCount >= 4 && neighborCount <= 5)) || (currState == 0 && neighborCount == 5))
-					nextState[i][j][k] = 1;
+					if ((currState == life && (neighborCount >= 5 && neighborCount <= 7)) || (currState == death && neighborCount == 6))
+					nextState[i][j][k] = life;
+				else if (currState == life && (neighborCount < 4 || neighborCount > 5))
+					nextState[i][j][k] = death;
 				else
-					nextState[i][j][k] = 0;
+					nextState[i][j][k] = GRID[i][j][k];
+				*/
+
+				if ((currState == life && (neighborCount >= 5 && neighborCount <= 7)) || (currState == death && neighborCount == 6))
+					nextState[i][j][k] = life;
+				else
+					nextState[i][j][k] = death;
+
+				/*
+				if ((currState == life && neighborCount == 2) || (currState == death && (neighborCount == 1 || neighborCount == 3 || neighborCount == 4)))
+					nextState[i][j][k] = life;
+				else if (currState == life && (neighborCount == 0 || neighborCount > 4))
+					nextState[i][j][k] = death;
+				else
+					nextState[i][j][k] = GRID[i][j][k];
+
+				if (currState == life && (neighborCount < 2 || (neighborCount != 5 && neighborCount > 3)))
+					nextState[i][j][k] = death;
+				if (currState == life && (neighborCount == 2 || neighborCount == 3))
+					nextState[i][j][k] = life;
+				if (currState == death && neighborCount == 5)
+					nextState[i][j][k] = life;
+				else
+					nextState[i][j][k] = GRID[i][j][k];
+				*/
+
 			}
 
 	// Fill grid with the next state
@@ -220,7 +275,9 @@ void getNextState()
 		delete[] nextState[i];
 	}
 	delete[] nextState;
-} 
+
+	isPaused = true;
+}
 
 // ********* # OF NEIGHBORS LOGIC FOR POINT (x,y) *********
 int countNeighbors(int x, int y, int z)
@@ -234,7 +291,7 @@ int countNeighbors(int x, int y, int z)
 			for (int k = -1; k < 2; k++)
 			{
 				/*
-					Imagine we have a 10x10 grid. 
+					Imagine we have a 10x10 grid.
 					If we are looking at a position of x = 9:
 					We always want to know what is the to right of that position, but x + 1 = 10 which is out of bounds.
 					BUT, x + 1 + 10 (columns) % 10 = 20 % 10 = 0
@@ -270,85 +327,95 @@ void update(int value) {
 // ***** TRANSFORM FUNCTIONS *****
 void translate(float x, float y, float z)
 {
-    glTranslatef(x, y, z);
+	glTranslatef(x, y, z);
 }
 void rotate(float angle, float x, float y, float z)
 {
-    glRotatef(angle, x, y, z);
+	glRotatef(angle, x, y, z);
 }
 void zoom(float factor)
 {
-    glScalef(factor, factor, factor);
+	glScalef(factor, factor, factor);
 }
 
 
 // ********* KEYBOARD FUNCTION *********
 void keyboard(unsigned char key, int x, int y)
 {
-    key = tolower(key);
+	key = tolower(key);
 	std::cout << key << std::endl;
-    switch (key)
-    {
-        case 'q':
-            exit(0);
-            break;
-        case 'a':
-            translate(SCREEN_WIDTH / 10, 0, 0);
-            break;
-        case 'd':
-            translate(-SCREEN_WIDTH / 10, 0, 0);
-            break;
-        case 's':
-            translate(0, SCREEN_HEIGHT / 10, 0);
-            break;
-        case 'w':
-            translate(0, -SCREEN_HEIGHT / 10, 0);
-            break;
-		case 'r':
-			zoom(1.1);
-			break;
-		case 'f':
-			zoom(0.9);
-			break;
-        case 'z':
-            rotate(1, 0, 0, 1);
-            break;
-        case 'x':
-            rotate(-1, 0, 0, 1);
-            break;
-        case ' ':
-            // pause the game
-			isPaused = !isPaused;
-            break;
-        default:
-            break;   
-    }
+	switch (key)
+	{
+	case 'q':
+		exit(0);
+		break;
+	case 'a':
+		translate(SCREEN_WIDTH / 10, 0, 0);
+		break;
+	case 'd':
+		translate(-SCREEN_WIDTH / 10, 0, 0);
+		break;
+	case 's':
+		translate(0, SCREEN_HEIGHT / 10, 0);
+		break;
+	case 'w':
+		translate(0, -SCREEN_HEIGHT / 10, 0);
+		break;
+	case 'r':
+		zoom(1.1);
+		break;
+	case 'f':
+		zoom(0.9);
+		break;
+	case 'z':
+		rotate(1, 0, 0, 1);
+		break;
+	case 'x':
+		rotate(-1, 0, 0, 1);
+		break;
+	case ' ':
+		// pause the game
+		isPaused = !isPaused;
+		break;
+	case 'l': // reset
+		createRandomState();
+		break;
+	default:
+		break;
+	}
 }
 
 // ********* INPUT CALLBACKS **************
 void mouse(int button, int state, int x, int y) {
 	std::cout << "Mouse event: " << button << " " << state << " " << std::endl;
-    if (button == 3) { // scroll wheel up not working :(
-        zoom(5);
-    } else if (button == 4) { // scroll wheel down not working :(
-        zoom(-5);
-    } else if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        mouseX = x;
-        mouseY = y;
-    } else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-        mouseX = x;
-        mouseY = y;
-    } else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
-        mouseX = x;
-        mouseY = y;
-    } else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-        mouseX = x;
-        mouseY = y;
-    } else if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP) {
-        mouseX = x;
-        mouseY = y;
-    } else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
-        mouseX = x;
-        mouseY = y;
-    }
+	if (button == 3) { // scroll wheel up not working :(
+		zoom(5);
+	}
+	else if (button == 4) { // scroll wheel down not working :(
+		zoom(-5);
+	}
+	else if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+		mouseX = x;
+		mouseY = y;
+	}
+	else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
+		mouseX = x;
+		mouseY = y;
+	}
+	else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
+		mouseX = x;
+		mouseY = y;
+	}
+	else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+		mouseX = x;
+		mouseY = y;
+	}
+	else if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP) {
+		mouseX = x;
+		mouseY = y;
+	}
+	else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
+		mouseX = x;
+		mouseY = y;
+	}
 }
