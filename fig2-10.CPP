@@ -6,6 +6,32 @@
 	3D implementation to John Conway's game of life using GLUT.
 */
 
+/*
+	Controls:
+		q
+			Quits the program
+		w/a/s/d
+			Camera controls
+		r/f
+			Zoom in and out
+		z/x
+			Rotate horizontally
+		p
+			Start and pause game
+		t
+			Reset game to setting mode
+		l
+			Reset game with random seed
+
+		In setting mode:
+		Arrow keys
+			Move cursor in x/y axes
+		Shift + up/down
+			move cursor in z axis
+		Spacebar
+			Select and unselect a cell for the initial seed
+*/
+
 #include <iostream>
 
 #if defined(__APPLE__)
@@ -28,18 +54,32 @@
 void Display(void);
 void Init(void);
 void initGlut(int argc, char** argv);
+void setSeed(void);
 void createRandomState(void);
 void getNextState(void);
 int countNeighbors(int x, int y, int z);
 void update(int value);
 void mouse(int button, int state, int x, int y);
 void keyboard(unsigned char key, int x, int y);
+void arrowKeyInput(int key, int x, int y);
+void chooseCursorPosition(void);
 // ***** TRANSFORM FUNCTIONS *****
 void translate(float x, float y, float z);
 void rotate(float angle, float x, float y, float z);
 void zoom(float factor);
 
-
+/*
+	The State of each cell in the game of life is either alive (life) or dead (death).
+	The other states are for the setting phase to tell the user where their cursor is and what they've selected.  
+*/
+enum State
+{
+	cursorOnSet = 4,
+	userCursor = 3,
+	userSet = 2,
+	life = 1,
+	death = 0
+};
 
 // ********* MAIN *********
 int main(int argc, char** argv)
@@ -59,13 +99,14 @@ int main(int argc, char** argv)
 
 // ********* GLOBALS *********
 const int scale = 5; // grid scale 
-const int SCREEN_WIDTH = 1200 * scale, SCREEN_HEIGHT = 800 * scale, DEPTH = 1200 * scale, RESOLUTION = 80, FPS = 10; // dimensions (x,y,z) of grid, size of blocks, and FPS
+const int SCREEN_WIDTH = 1200 * scale, SCREEN_HEIGHT = 800 * scale, DEPTH = 1200 * scale, RESOLUTION = 160; // dimensions (x,y,z) of grid, size of blocks, and FPS
 const int COLUMNS = SCREEN_WIDTH / RESOLUTION, ROWS = SCREEN_HEIGHT / RESOLUTION, AISLES = DEPTH / RESOLUTION; // # of columns, rows, and aisles in grid
+int FPS = 10;
 int GRID[COLUMNS][ROWS][AISLES]; // Current (columns x rows x aisles) grid, holds states of cells
 int*** nextState = NULL; // next generation grid
-float cameraAngle = 1; // angle of camera
-int startingAmount = 20000; // initial cell count
-bool isPaused = false; // pause flag 
+int startingAmount = 10000; // initial cell count
+bool isPaused = false, isSetting = true; // pause flag 
+int userCursorX = COLUMNS / 2, userCursorY = ROWS / 2, userCursorZ = AISLES / 2;
 GLfloat mouseX, mouseY; // mouse coordinates
 
 // ********* INIT GLUT *********
@@ -77,16 +118,16 @@ void initGlut(int argc, char** argv)
 	glutInitWindowSize(SCREEN_WIDTH, SCREEN_HEIGHT);
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("Conway's Game of Life 3D");
-	glutMouseFunc(mouse);
 	glutKeyboardFunc(keyboard);
 	glutDisplayFunc(Display);
+	glutSpecialFunc(arrowKeyInput);
 }
 
 // ********* DISPLAY FUNC *********
 void Display()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear screen
-
+	bool allDead = true;
 	// draw grid
 	for (int i = 0; i < COLUMNS; i++)
 		for (int j = 0; j < ROWS; j++)
@@ -94,17 +135,28 @@ void Display()
 			{
 				int x = i * RESOLUTION, y = j * RESOLUTION, z = k * RESOLUTION; // get where the rect starts
 
-
 				// If the cell is dead, move on 
-				if (GRID[i][j][k] != 1) continue;
+				if (GRID[i][j][k] == death) continue;
+				
+				allDead = false;
 
 				glPushMatrix();
-
 				glTranslatef(x, y, z - 350);
 				glScalef(0.8, 0.8, 0.8);
 
 				// draw cube
-				glColor3f(1.0 / (i + 2), 1.0 / (j + 2), 1.0 / (k + 2));
+
+				// if the game started, set the cube to its color
+				if (!isSetting && (GRID[i][j][k] == userSet || GRID[i][j][k] == cursorOnSet))
+					GRID[i][j][k] = life;
+
+				if (GRID[i][j][k] == life)
+					glColor3f(0, 0, 0);
+				else if (GRID[i][j][k] == userSet) //cell set by user
+					glColor3f(0, 0, 1.0);
+				else if (GRID[i][j][k] == cursorOnSet)
+					glColor3f(0, 1.0, 0);
+
 				glutSolidCube(RESOLUTION);
 
 				// draw outline along cube
@@ -113,6 +165,15 @@ void Display()
 
 				glPopMatrix();
 			}
+
+	// If everyone dies, restart the game
+	if (allDead) 
+	{
+		userCursorX = COLUMNS / 2;
+		userCursorY = ROWS / 2;
+		userCursorZ = AISLES / 2;
+		isSetting = true;
+	}
 
 	// commence 
 	glFlush();
@@ -134,7 +195,7 @@ void Init()
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(-1, SCREEN_WIDTH, -1, SCREEN_HEIGHT, 10000, -10000);
+	glOrtho(-1, SCREEN_WIDTH, -1, SCREEN_HEIGHT, 100000, -100000);
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
@@ -154,41 +215,63 @@ void createRandomState()
 	for (int i = 0; i < COLUMNS; i++)
 		for (int j = 0; j < ROWS; j++)
 			for (int k = 0; k < AISLES; k++)
-				GRID[i][j][k] = 0;
+				GRID[i][j][k] = death;
 
-	// fill random spots of the grid until we have reached the limit startingAmount
-	int temp = startingAmount;
-	while (temp > 0)
-		for (int i = 0; i < COLUMNS; i++)
-			for (int j = 0; j < ROWS; j++)
-				for (int k = 0; k < AISLES; k++)
-				{
-					if (temp <= 0) break;
-					if (GRID[i][j][k] == 1) continue;
-					int decision = rand() % 200;
+	// assign random states to each cell (alive or dead)
+	for (int i = 0; i < COLUMNS; i++)
+		for (int j = 0; j < ROWS; j++)
+			for (int k = 0; k < AISLES; k++)
+			{	
+				int decision = rand() % 200;
 
-					if (decision > 180)
-					{
-						GRID[i][j][k] = 1;
-						temp--;
-					}
-					else GRID[i][j][k] = 0;
-				}
+				if (decision > 175)
+					GRID[i][j][k] = life;
+				else 
+					GRID[i][j][k] = 0;
+			}
 }
 
-// A cell has two states, alive or dead 
-enum State
+// ********* SET SEED *********
+void setSeed()
 {
-	life = 1,
-	death = 0
-};
+	// don't need to do this if we are selecting an already set cell 
+	if (GRID[userCursorX][userCursorY][userCursorZ] == cursorOnSet)
+		return; 
+
+	// remove the previous cursor
+	for (int i = 0; i < COLUMNS; i++)
+		for (int j = 0; j < ROWS; j++)
+			for (int k = 0; k < AISLES; k++)
+				if (GRID[i][j][k] == cursorOnSet)
+					GRID[i][j][k] = userSet;
+				else if (GRID[i][j][k] != userSet)
+					GRID[i][j][k] = death;
+	
+	// set on or off the cell
+	if (GRID[userCursorX][userCursorY][userCursorZ] == userSet)
+		GRID[userCursorX][userCursorY][userCursorZ] = cursorOnSet;
+	else 
+		GRID[userCursorX][userCursorY][userCursorZ] = userCursor;
+}
+// ********* SET SEED LOGIC *********
+void chooseCursorPosition()
+{
+	// if we aren't selecting, don't do this
+	if (!isSetting) return; 
+
+	// reverse the choice
+	if (GRID[userCursorX][userCursorY][userCursorZ] == userSet || GRID[userCursorX][userCursorY][userCursorZ] == cursorOnSet)
+		GRID[userCursorX][userCursorY][userCursorZ] = death;
+	else
+		GRID[userCursorX][userCursorY][userCursorZ] = userSet;
+}
 
 // ********* NEXT STATE LOGIC *********
 void getNextState()
 {
-	if (isPaused) {
+	if (isPaused) 
 		return;
-	}
+	
 
 	// fill nextState with the next iteration of grid, then set grid to nextState
 	nextState = new int** [COLUMNS];
@@ -243,7 +326,6 @@ void getNextState()
 	}
 	delete[] nextState;
 
-	isPaused = true;
 }
 
 // ********* # OF NEIGHBORS LOGIC FOR POINT (x,y,z) *********
@@ -271,13 +353,14 @@ int countNeighbors(int x, int y, int z)
 
 // ********* UPDATE *********
 void update(int value) {
-	getNextState(); // Calculate the next state 
-
-	cameraAngle += .2;
+	if (isSetting)
+		setSeed(); // display setting screen phase
+	else
+		getNextState(); // when done selecting, calculate the next state 
 
 	glutPostRedisplay(); // Render the next, now current, grid
 
-	glutTimerFunc(1000 / FPS, update, 0); // Wait to update again
+	glutTimerFunc(1000 / ((isSetting) ? FPS : 5), update, 0); // Wait to update again
 }
 
 
@@ -297,7 +380,6 @@ void zoom(float factor)
 	glScalef(factor, factor, factor);
 }
 
-
 // ********* KEYBOARD FUNCTION *********
 void keyboard(unsigned char key, int x, int y)
 {
@@ -305,11 +387,11 @@ void keyboard(unsigned char key, int x, int y)
 	std::cout << key << std::endl;
 	switch (key)
 	{
-		// quit
+	// quit
 	case 'q':
 		exit(0);
 		break;
-		// move camera
+	// move camera
 	case 'a':
 		translate(SCREEN_WIDTH / 10, 0, 0);
 		break;
@@ -322,26 +404,44 @@ void keyboard(unsigned char key, int x, int y)
 	case 'w':
 		translate(0, -SCREEN_HEIGHT / 10, 0);
 		break;
-		// zoom in / out
+	// zoom in / out
 	case 'r':
 		zoom(1.1);
 		break;
 	case 'f':
 		zoom(0.9);
 		break;
-		// rotate grid
+	// rotate grid
 	case 'z':
-		rotate(1, 0, 0, 1);
+		rotate(1, 0, 1, 0);
 		break;
 	case 'x':
-		rotate(-1, 0, 0, 1);
+		rotate(-1, 0, 1, 0);
 		break;
-		// pause the game
+	// pause/start the game
+	case 'p':
+		if (isSetting)
+			isSetting = false; // start the game
+		else 
+			isPaused = !isPaused;		
+		break;
+	// Reset grid to selection 
+	case 't':
+		if (isSetting == true)
+			// set grid to nothing
+			for (int i = 0; i < COLUMNS; i++)
+				for (int j = 0; j < ROWS; j++)
+					for (int k = 0; k < AISLES; k++)
+							GRID[i][j][k] = death;
+		isSetting = true;
+		break;
+	// Select cell
 	case ' ':
-		isPaused = !isPaused;
+		chooseCursorPosition();
 		break;
-		// reset game
+	// reset game
 	case 'l':
+		isSetting = false;
 		createRandomState();
 		break;
 	default:
@@ -350,37 +450,52 @@ void keyboard(unsigned char key, int x, int y)
 }
 
 // ********* INPUT CALLBACKS **************
-void mouse(int button, int state, int x, int y) {
-	// get mouse coordinates on screen
-	std::cout << "Mouse event: " << button << " " << state << " " << std::endl;
-	if (button == 3) { // scroll wheel up not working :(
-		zoom(5);
-	}
-	else if (button == 4) { // scroll wheel down not working :(
-		zoom(-5);
-	}
-	else if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-		mouseX = x;
-		mouseY = y;
-	}
-	else if (button == GLUT_RIGHT_BUTTON && state == GLUT_DOWN) {
-		mouseX = x;
-		mouseY = y;
-	}
-	else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_DOWN) {
-		mouseX = x;
-		mouseY = y;
-	}
-	else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-		mouseX = x;
-		mouseY = y;
-	}
-	else if (button == GLUT_RIGHT_BUTTON && state == GLUT_UP) {
-		mouseX = x;
-		mouseY = y;
-	}
-	else if (button == GLUT_MIDDLE_BUTTON && state == GLUT_UP) {
-		mouseX = x;
-		mouseY = y;
+void arrowKeyInput(int key, int x, int y)
+{
+	int keyboardFunctionKey = glutGetModifiers();
+	
+	switch (key)
+	{
+	// up arrow key moves up both in the y axis and z
+	case GLUT_KEY_UP:
+		if (keyboardFunctionKey == 1) // hold shift + up to go up 
+			if (userCursorZ + 1 < AISLES)
+				userCursorZ++;
+			else
+				userCursorZ = 0;
+		else 
+			if (userCursorY + 1 < ROWS)
+				userCursorY++;
+			else
+				userCursorY = 0;
+			break;
+	// down arrow key moves down in both the y and z axis
+	case GLUT_KEY_DOWN:
+		if (keyboardFunctionKey == 1) //shift + down to go down
+			if (userCursorZ - 1 >= 0)
+				userCursorZ--;
+			else
+				userCursorZ = AISLES - 1;
+		else 
+			if (userCursorY - 1 >= 0)
+				userCursorY--;
+			else
+				userCursorY = ROWS - 1;
+			break;
+	// move right and left with respective arrow keys in x axis
+	case GLUT_KEY_RIGHT:
+		if (userCursorX + 1 < COLUMNS)
+			userCursorX++;
+		else
+			userCursorX = 0;
+		break;
+	case GLUT_KEY_LEFT:
+		if (userCursorX - 1 >= 0)
+			userCursorX--;
+		else
+			userCursorY = COLUMNS - 1;
+		break;
+	default:
+		break;
 	}
 }
