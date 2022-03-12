@@ -102,8 +102,8 @@ const int scale = 5; // grid scale
 const int SCREEN_WIDTH = 1200 * scale, SCREEN_HEIGHT = 800 * scale, DEPTH = 1200 * scale, RESOLUTION = 160; // dimensions (x,y,z) of grid, size of blocks, and FPS
 const int COLUMNS = SCREEN_WIDTH / RESOLUTION, ROWS = SCREEN_HEIGHT / RESOLUTION, AISLES = DEPTH / RESOLUTION; // # of columns, rows, and aisles in grid
 int FPS = 10;
-int GRID[COLUMNS][ROWS][AISLES]; // Current (columns x rows x aisles) grid, holds states of cells
-int*** nextState = NULL; // next generation grid
+State GRID[COLUMNS][ROWS][AISLES]; // Current (columns x rows x aisles) grid, holds states of cells
+State*** nextState = NULL; // next generation grid
 int startingAmount = 10000; // initial cell count
 bool isPaused = false, isSetting = true; // pause flag 
 int userCursorX = COLUMNS / 2, userCursorY = ROWS / 2, userCursorZ = AISLES / 2;
@@ -227,7 +227,7 @@ void createRandomState()
 				if (decision > 175)
 					GRID[i][j][k] = life;
 				else 
-					GRID[i][j][k] = 0;
+					GRID[i][j][k] = death;
 			}
 }
 
@@ -274,14 +274,14 @@ void getNextState()
 	
 
 	// fill nextState with the next iteration of grid, then set grid to nextState
-	nextState = new int** [COLUMNS];
+	nextState = new State** [COLUMNS];
 
 	// fill with empty arrays 
 	for (int i = 0; i < COLUMNS; i++)
 	{
-		nextState[i] = new int* [ROWS];
+		nextState[i] = new State* [ROWS];
 		for (int j = 0; j < ROWS; j++)
-			nextState[i][j] = new int[AISLES];
+			nextState[i][j] = new State[AISLES];
 	}
 
 	// get next state 
@@ -290,7 +290,7 @@ void getNextState()
 			for (int k = 0; k < AISLES; k++)
 			{
 				// get current state
-				int currState = GRID[i][j][k];
+				State currState = GRID[i][j][k];
 
 				// find # of neighbors around this cell
 				int neighborCount = countNeighbors(i, j, k);
@@ -384,7 +384,6 @@ void zoom(float factor)
 void keyboard(unsigned char key, int x, int y)
 {
 	key = tolower(key);
-	std::cout << key << std::endl;
 	switch (key)
 	{
 	// quit
