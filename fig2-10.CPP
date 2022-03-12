@@ -35,19 +35,18 @@
 #include <iostream>
 
 #if defined(__APPLE__)
-#include <GLUT/glut.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#include <math.h>
-#include <cctype>
+	#include <GLUT/glut.h>
+	#include <OpenGL/gl.h>
+	#include <OpenGL/glu.h>
+	#include <math.h>
+	#include <cctype>
 #else
-#include <windows.h>
-#include <gl/Gl.h>
-#include <gl/Glu.h>
-//#include <iostream.h>
-#include "glut.h"
-#include "math.h"
-#include <cctype>
+	#include <windows.h>
+	#include <gl/Gl.h>
+	#include <gl/Glu.h>
+	#include "glut.h"
+	#include "math.h"
+	#include <cctype>
 #endif
 
 // ********* PROTOTYPES *********
@@ -74,11 +73,11 @@ void zoom(float factor);
 */
 enum State
 {
-	cursorOnSet = 4,
-	userCursor = 3,
-	userSet = 2,
-	life = 1,
-	death = 0
+	cursorOnSet = 4, // Cursor on a set cell
+	userCursor = 3, // Cursor off a set cell
+	userSet = 2, // A set cell with no cursor on top
+	life = 1, // A life cell in simulation 
+	death = 0 // A dead cell in simulation 
 };
 
 // ********* MAIN *********
